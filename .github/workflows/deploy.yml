@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -33,3 +33,26 @@ jobs:
       - name: Build Flutter Web
         working-directory: source/Flutter Projects/my_first_flutter_app
         run: flutter build web --release
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          LIGHTSAIL_HOST: ${{ secrets.LIGHTSAIL_HOST }}
+          LIGHTSAIL_PORT: ${{ secrets.LIGHTSAIL_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/lightsail_key
+          chmod 600 ~/.ssh/lightsail_key
+          ssh-keyscan -p "$LIGHTSAIL_PORT" -H "$LIGHTSAIL_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy to AWS Lightsail
+        env:
+          LIGHTSAIL_HOST: ${{ secrets.LIGHTSAIL_HOST }}
+          LIGHTSAIL_PORT: ${{ secrets.LIGHTSAIL_PORT }}
+          LIGHTSAIL_USER: ${{ secrets.LIGHTSAIL_USER }}
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/lightsail_key -p $LIGHTSAIL_PORT" \
+            "source/Flutter Projects/my_first_flutter_app/build/web/" \
+            "$LIGHTSAIL_USER@$LIGHTSAIL_HOST:/var/www/html/"
